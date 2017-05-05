@@ -82,7 +82,7 @@ def collectAndSend():
 	headers = requestHeaders()
 
 	# Send a POST request to MID with the collected data
-	r = requests.post(url, auth=('admin', 'admin'), headers=headers, data=data)
+	r = requests.post(url, headers=headers, data=data)
 
 	# Log a metric send event
 	print('Sent ' + str(len(metrics)) + ' metrics at ' + datetime.utcnow().strftime(DATE_FORMAT)[:-3])
@@ -90,7 +90,28 @@ def collectAndSend():
 
 # Function to create request headers for sending data to MID
 def requestHeaders():
-	# TODO - Implement authorization token header
+	# Build a request string to be turned into an HMAC
+	auth = '';
+	auth += 'POST\n'
+	auth += 'application/json\n'
+	auth += datetime.utcnow().strftime(DATE_FORMAT)[:-3] + 'Z\n'
+	auth += '/api/mid/sa/metrics'
+
+	# Create and HMAC token using the secret and request string
+	hashed = hmac.new(MID_SECRET, auth, sha1)
+	encoded = hashed.digest().encode('base64').rstrip('\n')
+
+	# Return the request headers
 	return {
+		'Authorization': encoded,
+		'Date': datetime.utcnow().strftime(DATE_FORMAT)[:-3] + 'Z',
 		'Content-Type': 'application/json'
 	}
+
+
+
+# Trigger metric collection once to avoid initial zero values
+collectMetrics()
+
+# Set up a repeating timer to collect metrics at our preferred interval
+rt = RepeatedTimer(COLLECTION_INTERVAL, collectAndSend)
